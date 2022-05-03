@@ -6,7 +6,7 @@ from .base_encoder import BaseEncoder
 import math
 from torch.nn import functional as F
 
-
+from visualizer import get_local
 class BERTEncoder(nn.Module):
     def __init__(self, max_length, pretrain_path, blank_padding=True, mask_entity=False):
         """
@@ -149,7 +149,10 @@ class BERTEntityEncoder(nn.Module):
         Return:
             (B, 2H), representations for sentences
         """
-        hidden, _ = self.bert(token, attention_mask=att_mask)
+        token_type_ids=torch.zeros_like(token,dtype=torch.long, device=token.device)
+        out = self.bert(input_ids=token, attention_mask=att_mask,token_type_ids=token_type_ids)
+        hidden = out.last_hidden_state  
+        # print(type(hidden), type(_))
         # Get entity start hidden state
         onehot_head = torch.zeros(hidden.size()[:2]).float().to(hidden.device)  # (B, L)
         onehot_tail = torch.zeros(hidden.size()[:2]).float().to(hidden.device)  # (B, L)
@@ -163,6 +166,12 @@ class BERTEntityEncoder(nn.Module):
         # visual feature
         pic = pic.view(-1, 10, self.pic_feat)
         pic = self.linear_pic(pic)
+        # add
+        # x = hidden[:,1:-1,:].transpose(1,2)
+        # x = torch.avg_pool1d(x, kernel_size=x.shape[-1]).squeeze(-1)
+        # x = self.linear_hidden(x)
+        # pic = pic.transpose(1,2)
+        # pic_out = torch.avg_pool1d(pic, kernel_size=pic.shape[-1]).squeeze(-1)  # [batch, 768]
 
         # semantics alignment by attention
         x_k = self.linear_k(hidden_rel)
@@ -254,7 +263,8 @@ class BERTEntityEncoder(nn.Module):
         att_mask[0, :avai_len] = 1
 
         return indexed_tokens, att_mask, pos1, pos2
-
+    
+    @get_local('att_map')
     def att(self, query, key, value):
         d_k = query.size(-1)
 
@@ -262,5 +272,4 @@ class BERTEntityEncoder(nn.Module):
             query, key.transpose(-2, -1)
         ) / math.sqrt(d_k)
         att_map = F.softmax(scores, dim=-1)
-
         return torch.matmul(att_map, value)

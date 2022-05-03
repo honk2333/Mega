@@ -6,7 +6,7 @@ from .data_loader import SentenceRELoader
 from .utils import AverageMeter
 import numpy as np
 from sklearn import metrics
-
+from torch.utils.tensorboard import SummaryWriter   
 
 class SentenceRE(nn.Module):
 
@@ -108,6 +108,7 @@ class SentenceRE(nn.Module):
             self.cuda()
         # Ckpt
         self.ckpt = ckpt
+        self.writer = SummaryWriter('/home/wanghk/Mega/ckpt/log')
 
     def train_model(self, metric='acc'):
         best_metric = 0
@@ -141,6 +142,9 @@ class SentenceRE(nn.Module):
                 avg_acc.update(acc, 1)
                 avg_f1.update(f1, 1)
                 t.set_postfix(loss=avg_loss.avg, acc=avg_acc.avg, f1=avg_f1.avg)
+                self.writer.add_scalar('train_loss', loss.item(), epoch)
+                self.writer.add_scalar('train_acc', acc, epoch)
+                self.writer.add_scalar('train_f1', f1, epoch)
                 # Optimize
                 loss.backward()
                 self.optimizer.step()
@@ -151,6 +155,9 @@ class SentenceRE(nn.Module):
             # Val
             logging.info("=== Epoch %d val ===" % epoch)
             result = self.eval_model(self.val_loader)
+            self.writer.add_scalar('valid_acc', result['acc'], epoch)
+            self.writer.add_scalar('valid_f1', result['micro_f1'], epoch)
+
             logging.info('Metric {} current / best: {} / {}'.format(metric, result[metric], best_metric))
             if result[metric] > best_metric:
                 logging.info("Best ckpt and saved.")
@@ -159,6 +166,16 @@ class SentenceRE(nn.Module):
                     os.mkdir(folder_path)
                 torch.save({'state_dict': self.model.state_dict()}, self.ckpt)
                 best_metric = result[metric]
+                
+                # 测试集指标
+                result = self.eval_model(self.test_loader)
+                # Print the result
+                logging.info('Test set results:\n')
+                logging.info('Accuracy: {}\n'.format(result['acc']))
+                logging.info('Micro precision: {}\n'.format(result['micro_p']))
+                logging.info('Micro recall: {}\n'.format(result['micro_r']))
+                logging.info('Micro F1: {}'.format(result['micro_f1']))
+
         logging.info("Best %s on val set: %f" % (metric, best_metric))
 
     def eval_model(self, eval_loader):
@@ -192,5 +209,5 @@ class SentenceRE(nn.Module):
 
         return result
 
-    def load_state_dict(self, state_dict):
-        self.model.load_state_dict(state_dict)
+    def load_state_dict(self, state_dict, strict=True):
+        self.model.load_state_dict(state_dict, strict)

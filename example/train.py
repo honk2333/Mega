@@ -1,11 +1,18 @@
 # coding:utf-8
+from visualizer import get_local
+get_local.activate() # 激活装饰器
+
+import sys
+import os
+import matplotlib.pyplot as plt
+sys.path.append('./')
 import torch
 import numpy as np
 import json
 import opennre.model,opennre.framework,opennre.encoder
-import sys
-import os
+
 import argparse
+import pickle
 import logging
 
 parser = argparse.ArgumentParser()
@@ -13,7 +20,7 @@ parser.add_argument('--pretrain_path', default='bert-base-uncased',
                     help='Pre-trained ckpt path / model name (hugginface)')
 parser.add_argument('--ckpt', default='',
                     help='Checkpoint name')
-parser.add_argument('--pooler', default='entity', choices=['cls', 'entity', 'rel'],
+parser.add_argument('--pooler', default='entity', choices=['cls', 'entity', 'rel', 'visualbert'],
                     help='Sentence representation pooler')
 parser.add_argument('--only_test', action='store_true',
                     help='Only run test')
@@ -49,13 +56,13 @@ parser.add_argument('--rel_num', default='1', type=str,
 args = parser.parse_args()
 
 # Some basic settings
-root_path = '.'
+root_path = '/home/data_ti4_d/wanghk/MEGA'
 sys.path.append(root_path)
 if not os.path.exists('ckpt'):
     os.mkdir('ckpt')
 if len(args.ckpt) == 0:
     args.ckpt = '{}_{}_{}'.format(args.dataset, args.pretrain_path, args.pooler)
-ckpt = 'ckpt/{}.pth.tar'.format(args.ckpt)
+ckpt = 'ckpt/{}.tar'.format(args.ckpt)
 
 if args.dataset != 'none':
     # opennre.download(args.dataset, root_path=root_path)
@@ -102,6 +109,12 @@ elif args.pooler == 'cls':
         pretrain_path=args.pretrain_path,
         mask_entity=args.mask_entity
     )
+elif args.pooler == 'visualbert':
+    sentence_encoder = opennre.encoder.VisualBertEncoder(
+        max_length=args.max_length,
+        pretrain_path=args.pretrain_path,
+        mask_entity=args.mask_entity
+    )
 else:
     raise NotImplementedError
 
@@ -132,11 +145,27 @@ if not args.only_test:
     framework.train_model('micro_f1')
 
 # Test
-framework.load_state_dict(torch.load(ckpt)['state_dict'])
+framework.load_state_dict(torch.load(ckpt)['state_dict'], strict=False)
+
+# pretrained_dict=torch.load(ckpt)['state_dict']
+# model_dict=framework.state_dict()
+# print(model_dict.keys())
+# # 1. filter out unnecessary keys
+# pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+# # 2. overwrite entries in the existing state dict
+# model_dict.update(pretrained_dict)
+# framework.load_state_dict(pretrained_dict)
+
+
 result = framework.eval_model(framework.test_loader)
+cache = get_local.cache # ->  {'your_attention_function': [attention_map]}
+pickle.dump(cache, open('/home/wanghk/Mega/ckpt/att_map.pkl','wb'))
+
+
 # Print the result
 logging.info('Test set results:\n')
 logging.info('Accuracy: {}\n'.format(result['acc']))
 logging.info('Micro precision: {}\n'.format(result['micro_p']))
 logging.info('Micro recall: {}\n'.format(result['micro_r']))
 logging.info('Micro F1: {}'.format(result['micro_f1']))
+
