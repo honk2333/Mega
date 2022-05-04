@@ -26,7 +26,8 @@ parser.add_argument('--only_test', action='store_true',
                     help='Only run test')
 parser.add_argument('--mask_entity', action='store_true',
                     help='Mask entity mentions')
-
+parser.add_argument('--exp_name', default='default',
+                    help='Set experiment name')
 # Data
 parser.add_argument('--metric', default='micro_f1', choices=['micro_f1', 'acc'],
                     help='Metric for picking up best checkpoint')
@@ -137,7 +138,8 @@ framework = opennre.framework.SentenceRE(
     batch_size=args.batch_size,
     max_epoch=args.max_epoch,
     lr=args.lr,
-    opt='adamw'
+    opt='adamw',
+    exp_name=args.exp_name
 )
 
 # Train the model

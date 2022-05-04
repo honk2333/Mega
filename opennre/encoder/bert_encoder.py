@@ -134,9 +134,14 @@ class BERTEntityEncoder(nn.Module):
         self.linear_k = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear_v = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear_final1 = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        self.linear_final = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        self.linear_final = nn.Linear(self.hidden_size * 3, self.hidden_size)
         self.linear_merge = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear = nn.Linear(self.hidden_size, self.hidden_size)
+
+        self.linear_q2 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear_k2 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear_v2 = nn.Linear(self.hidden_size, self.hidden_size)
+
     def forward(self, token, att_mask, pos1, pos2, pic, rel):
         """
         Args:
@@ -166,28 +171,40 @@ class BERTEntityEncoder(nn.Module):
         # visual feature
         pic = pic.view(-1, 10, self.pic_feat)
         pic = self.linear_pic(pic)
-        # add
-        # x = hidden[:,1:-1,:].transpose(1,2)
-        # x = torch.avg_pool1d(x, kernel_size=x.shape[-1]).squeeze(-1)
-        # x = self.linear_hidden(x)
-        # pic = pic.transpose(1,2)
-        # pic_out = torch.avg_pool1d(pic, kernel_size=pic.shape[-1]).squeeze(-1)  # [batch, 768]
-
+       
         # semantics alignment by attention
         x_k = self.linear_k(hidden_rel)
         x_v = self.linear_v(hidden_rel)
         pic_q = self.linear_q(pic)
         pic = torch.sigmoid(self.att(pic_q, x_k, x_v))
 
-        # structural alignment and the combination of semantic graph alignment
-        rel = rel.view(-1, 10, self.max_length)
-        pic_rel = torch.matmul(rel, hidden_rel)
-        pic_out = torch.cat([pic, pic_rel], dim=-1)
-        pic_out = self.linear_final1(pic_out)
-        pic_out = torch.sum(pic_out, dim=1)
+        # # structural alignment and the combination of semantic graph alignment
+        # rel = rel.view(-1, 10, self.max_length)
+        # pic_rel = torch.matmul(rel, hidden_rel)
+        # pic_out = torch.cat([pic, pic_rel], dim=-1)
+        # pic_out = self.linear_final1(pic_out)
+        # pic_out = torch.sum(pic_out, dim=1)
+
+
+        # add
+        # x = hidden[:,1:-1,:].transpose(1,2)
+        # x = torch.avg_pool1d(x, kernel_size=x.shape[-1]).squeeze(-1)
+        # x = self.linear_hidden(x)
+
+        pic_k = self.linear_k2(pic)
+        pic_v = self.linear_v2(pic)
+        hidden_rel_q = self.linear_q2(hidden_rel)
+        hidden_rel = torch.sigmoid(self.att(hidden_rel_q,pic_k,pic_v))
+
+        pic = pic.transpose(1,2)
+        pic_out = torch.avg_pool1d(pic, kernel_size=pic.shape[-1]).squeeze(-1) 
+
+        hidden_rel = hidden_rel.transpose(1,2)
+        hidden_rel = torch.avg_pool1d(hidden_rel, kernel_size=hidden_rel.shape[-1]).squeeze(-1) 
+        # print(x.shape, pic_out)
 
         # fusion and final output
-        x = torch.cat([x, pic_out], dim=-1)
+        x = torch.cat([x, pic_out, hidden_rel], dim=-1)
         x = self.linear_final(x)
 
         return x

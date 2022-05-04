@@ -27,7 +27,9 @@ class SentenceRE(nn.Module):
                  lr=0.1,
                  weight_decay=1e-5,
                  warmup_step=300,
-                 opt='sgd'):
+                 opt='sgd',
+                 exp_name ='default'
+                 ):
 
         super().__init__()
         self.max_epoch = max_epoch
@@ -108,7 +110,7 @@ class SentenceRE(nn.Module):
             self.cuda()
         # Ckpt
         self.ckpt = ckpt
-        self.writer = SummaryWriter('/home/wanghk/Mega/ckpt/log')
+        self.writer = SummaryWriter('/home/wanghk/Mega/ckpt/log/'+ exp_name)
 
     def train_model(self, metric='acc'):
         best_metric = 0
@@ -142,9 +144,9 @@ class SentenceRE(nn.Module):
                 avg_acc.update(acc, 1)
                 avg_f1.update(f1, 1)
                 t.set_postfix(loss=avg_loss.avg, acc=avg_acc.avg, f1=avg_f1.avg)
-                self.writer.add_scalar('train_loss', loss.item(), epoch)
-                self.writer.add_scalar('train_acc', acc, epoch)
-                self.writer.add_scalar('train_f1', f1, epoch)
+                self.writer.add_scalar('train_loss', loss.item(), iter)
+                self.writer.add_scalar('train_acc', acc, iter)
+                self.writer.add_scalar('train_f1', f1, iter)
                 # Optimize
                 loss.backward()
                 self.optimizer.step()
@@ -166,15 +168,16 @@ class SentenceRE(nn.Module):
                     os.mkdir(folder_path)
                 torch.save({'state_dict': self.model.state_dict()}, self.ckpt)
                 best_metric = result[metric]
-                
-                # 测试集指标
-                result = self.eval_model(self.test_loader)
-                # Print the result
-                logging.info('Test set results:\n')
-                logging.info('Accuracy: {}\n'.format(result['acc']))
-                logging.info('Micro precision: {}\n'.format(result['micro_p']))
-                logging.info('Micro recall: {}\n'.format(result['micro_r']))
-                logging.info('Micro F1: {}'.format(result['micro_f1']))
+
+
+            # 测试集指标
+            result = self.eval_model(self.test_loader)
+            # Print the result
+            logging.info('Test set results:\n')
+            logging.info('Accuracy: {}\n'.format(result['acc']))
+            logging.info('Micro precision: {}\n'.format(result['micro_p']))
+            logging.info('Micro recall: {}\n'.format(result['micro_r']))
+            logging.info('Micro F1: {}'.format(result['micro_f1']))
 
         logging.info("Best %s on val set: %f" % (metric, best_metric))
 

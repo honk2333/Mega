@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0 python example/train.py \
+CUDA_VISIBLE_DEVICES=1 python example/train.py \
 --dataset ours \
 --batch_size 1 \
 --metric micro_f1 \
