@@ -1,10 +1,20 @@
+import imp
 import logging
+from xml.dom import HierarchyRequestErr
 import torch
 import torch.nn as nn
 from transformers import BertModel, BertTokenizer
 from .base_encoder import BaseEncoder
 import math
 from torch.nn import functional as F
+
+import sys
+import os
+sys.path.append('./opennre/')
+from models.layers.layer_norm import LayerNorm
+from models.layers.multi_head_attention import MultiHeadAttention
+from models.layers.position_wise_feed_forward import PositionwiseFeedForward
+from models.blocks.encoder_layer import EncoderLayer
 
 from visualizer import get_local
 class BERTEncoder(nn.Module):
@@ -110,6 +120,7 @@ class BERTEncoder(nn.Module):
         return indexed_tokens, att_mask
 
 
+
 class BERTEntityEncoder(nn.Module):
     def __init__(self, max_length, pretrain_path, blank_padding=True, mask_entity=False):
         """
@@ -122,7 +133,8 @@ class BERTEntityEncoder(nn.Module):
         self.blank_padding = blank_padding
         self.word_size = 50
         self.hidden_size = 1536
-        self.pic_feat = 4096
+        self.pic_feat = 2048
+        self.obj_num = 10
         self.mask_entity = mask_entity
         logging.info('Loading BERT pre-trained checkpoint.')
         self.bert = BertModel.from_pretrained(pretrain_path)
@@ -141,6 +153,44 @@ class BERTEntityEncoder(nn.Module):
         self.linear_q2 = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear_k2 = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear_v2 = nn.Linear(self.hidden_size, self.hidden_size)
+
+        self.linear_q3 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear_k3 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear_v3 = nn.Linear(self.hidden_size, self.hidden_size)
+
+
+        self.EncoderLayer1 = EncoderLayer(d_model=self.hidden_size,
+                                        ffn_hidden=self.hidden_size,
+                                        n_head=8,
+                                        drop_prob=0.1)
+        self.EncoderLayer2 = EncoderLayer(d_model=self.hidden_size,
+                                        ffn_hidden=self.hidden_size,
+                                        n_head=8,
+                                        drop_prob=0.1)
+        self.EncoderLayer3 = EncoderLayer(d_model=self.hidden_size,
+                                        ffn_hidden=self.hidden_size,
+                                        n_head=8,
+                                        drop_prob=0.1)
+        self.EncoderLayer4 = EncoderLayer(d_model=self.hidden_size,
+                                        ffn_hidden=self.hidden_size,
+                                        n_head=8,
+                                        drop_prob=0.1)
+        # self.attention = MultiHeadAttention(d_model=self.hidden_size, n_head=8)
+        # self.norm1 = LayerNorm(d_model=self.hidden_size)
+        # self.dropout1 = nn.Dropout(p=0.1)
+
+        # self.ffn = PositionwiseFeedForward(d_model=self.hidden_size, hidden=self.hidden_size, drop_prob=0.1)
+        # self.norm2 = LayerNorm(d_model=self.hidden_size)
+        # self.dropout2 = nn.Dropout(p=0.1)
+
+        # self.attention2 = MultiHeadAttention(d_model=self.hidden_size, n_head=8)
+        # self.norm3 = LayerNorm(d_model=self.hidden_size)
+        # self.dropout3 = nn.Dropout(p=0.1)
+
+        # self.ffn2 = PositionwiseFeedForward(d_model=self.hidden_size, hidden=self.hidden_size, drop_prob=0.1)
+        # self.norm4 = LayerNorm(d_model=self.hidden_size)
+        # self.dropout4 = nn.Dropout(p=0.1)
+
 
     def forward(self, token, att_mask, pos1, pos2, pic, rel):
         """
@@ -169,14 +219,17 @@ class BERTEntityEncoder(nn.Module):
         hidden_rel = self.linear_hidden(hidden)
 
         # visual feature
-        pic = pic.view(-1, 10, self.pic_feat)
+
+        # pic = pic.view(-1, 10, self.pic_feat)
+        pic = pic.view(-1, self.obj_num, self.pic_feat)
         pic = self.linear_pic(pic)
+
        
-        # semantics alignment by attention
-        x_k = self.linear_k(hidden_rel)
-        x_v = self.linear_v(hidden_rel)
-        pic_q = self.linear_q(pic)
-        pic = torch.sigmoid(self.att(pic_q, x_k, x_v))
+        # # semantics alignment by attention
+        # x_k = self.linear_k(hidden_rel)
+        # x_v = self.linear_v(hidden_rel)
+        # pic_q = self.linear_q(pic)
+        # pic_att = torch.sigmoid(self.att(pic_q, x_k, x_v))
 
         # # structural alignment and the combination of semantic graph alignment
         # rel = rel.view(-1, 10, self.max_length)
@@ -191,17 +244,28 @@ class BERTEntityEncoder(nn.Module):
         # x = torch.avg_pool1d(x, kernel_size=x.shape[-1]).squeeze(-1)
         # x = self.linear_hidden(x)
 
-        pic_k = self.linear_k2(pic)
-        pic_v = self.linear_v2(pic)
-        hidden_rel_q = self.linear_q2(hidden_rel)
-        hidden_rel = torch.sigmoid(self.att(hidden_rel_q,pic_k,pic_v))
+        # pic_k = self.linear_k2(pic)
+        # pic_v = self.linear_v2(pic)
+        # head_hidden_q = self.linear_q2(head_hidden)
+        # head_hidden_att = torch.sigmoid(self.att(head_hidden_q,pic_k,pic_v))
 
-        pic = pic.transpose(1,2)
-        pic_out = torch.avg_pool1d(pic, kernel_size=pic.shape[-1]).squeeze(-1) 
+        # pic_k = self.linear_k2(pic)
+        # pic_v = self.linear_v2(pic)
+        # tail_hidden_q = self.linear_q2(tail_hidden)
+        # tail_hidden_att = torch.sigmoid(self.att(tail_hidden_q,pic_k,pic_v))
 
-        hidden_rel = hidden_rel.transpose(1,2)
-        hidden_rel = torch.avg_pool1d(hidden_rel, kernel_size=hidden_rel.shape[-1]).squeeze(-1) 
-        # print(x.shape, pic_out)
+
+        att_mask = att_mask.unsqueeze(1).repeat(1,self.obj_num,1)
+        pic_att = self.EncoderLayer1(x=pic, y=hidden_rel, s_mask=att_mask.unsqueeze(1))
+        hidden_rel_att = self.EncoderLayer2(x=hidden_rel, y=pic, s_mask=att_mask.transpose(1,2).unsqueeze(1))
+
+
+        # hidden_rel_att = hidden_rel
+        hidden_rel_att = hidden_rel_att.transpose(1,2)
+        hidden_rel = torch.avg_pool1d(hidden_rel_att, kernel_size=hidden_rel_att.shape[-1]).squeeze(-1) 
+        pic_att = pic.transpose(1,2)
+        pic_out = torch.avg_pool1d(pic_att, kernel_size=pic_att.shape[-1]).squeeze(-1) 
+
 
         # fusion and final output
         x = torch.cat([x, pic_out, hidden_rel], dim=-1)
@@ -209,7 +273,7 @@ class BERTEntityEncoder(nn.Module):
 
         return x
 
-    def tokenize(self, item):
+    def tokenize(self, item, objs):
         """
         Args:
             item: data instance containing 'text' / 'token', 'h' and 't'

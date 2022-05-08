@@ -34,6 +34,13 @@ from transformers import BertModel, BertTokenizer
 import math
 from torch.nn import functional as F
 
+import sys
+import os
+sys.path.append('./opennre/')
+from models.layers.layer_norm import LayerNorm
+from models.layers.multi_head_attention import MultiHeadAttention
+from models.layers.position_wise_feed_forward import PositionwiseFeedForward
+
 tokenizer = BertTokenizer.from_pretrained('/home/data_ti6_c/wanghk/bert_model/bert-base-uncased')
 model = VisualBertModel.from_pretrained("/home/wanghk/Mega/visualbert-vqa-coco-pre")
 bert = BertModel.from_pretrained('/home/data_ti6_c/wanghk/bert_model/bert-base-uncased')
@@ -82,15 +89,29 @@ def att( query, key, value):
         att_map = F.softmax(scores, dim=-1)
         return torch.matmul(att_map, value)
 # self.linear_q = nn.Linear(self.hidden_size, self.hidden_size)
-x_k = torch.nn.Linear(768,768)(last_hidden_states)
-x_v = torch.nn.Linear(768,768)(last_hidden_states)
-pic_q = torch.nn.Linear(2048,768)(visual_embeds)
-pic = torch.sigmoid(att(pic_q, x_k, x_v))
-print(pic.shape)
+# x_k = torch.nn.Linear(768,768)(last_hidden_states)
+# x_v = torch.nn.Linear(768,768)(last_hidden_states)
+# pic_q = torch.nn.Linear(2048,768)(visual_embeds)
+# pic = torch.sigmoid(att(pic_q, x_k, x_v))
+# print(pic.shape)
 
-print(last_hidden_states.shape)
-pic_k = torch.nn.Linear(768,768)(pic)
-pic_v = torch.nn.Linear(768,768)(pic)
-hidden_rel_q = torch.nn.Linear(768,768)(last_hidden_states)
-hidden_rel = torch.sigmoid(att(hidden_rel_q,pic_k,pic_v))
-print(hidden_rel.shape)
+# print(last_hidden_states.shape)
+# pic_k = torch.nn.Linear(768,768)(pic)
+# pic_v = torch.nn.Linear(768,768)(pic)
+# hidden_rel_q = torch.nn.Linear(768,768)(last_hidden_states)
+# hidden_rel = torch.sigmoid(att(hidden_rel_q,pic_k,pic_v))
+# print(hidden_rel.shape)
+attention = MultiHeadAttention(d_model=768, n_head=8)
+pic = torch.nn.Linear(2048,768)(visual_embeds)
+print(pic.shape, last_hidden_states.shape)
+_pic = pic
+last_head_hidden = out.last_hidden_state
+print(last_head_hidden.shape)
+print(inputs['attention_mask'].shape)
+att_mask = inputs['attention_mask'].view(1,9)
+att_mask = inputs['attention_mask'].unsqueeze(1).repeat(1,10,1)
+print(att_mask.shape)
+# pic = attention(q=last_head_hidden , k=pic, v=pic, mask=att_mask.view(1,9,10))
+# hidden_rel = self.attention2(q=hidden_rel, k=_pic, v=_pic)
+pic = attention(q=pic , k=last_head_hidden, v=last_head_hidden, mask=att_mask.unsqueeze(1))
+print(pic.shape)

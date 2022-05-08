@@ -43,8 +43,9 @@ class SentenceREDataset(data.Dataset):
 
         # Load the pic feature file
         self.img_dict = {}
-        self.img_feat = 1024 * 4
+        self.img_feat = 1024 * 2
         self.obj_num = 10
+        self.obj_dict = {}
         zero_list = list(np.zeros([self.img_feat]))
         self.pic_file_list = os.listdir(self.pic_path)
         for pic_file in self.pic_file_list:
@@ -52,6 +53,8 @@ class SentenceREDataset(data.Dataset):
                 line_list = f.readlines()
                 feature_list = line_list[2].strip().split('\t')
                 class_list = line_list[1].strip().split('\t')
+                # print(line_list[0])
+                self.obj_dict[pic_file] = class_list
                 if class_list == ['']:
                     feature_list = zero_list * self.obj_num
                 elif len(class_list) < self.obj_num:
@@ -66,6 +69,8 @@ class SentenceREDataset(data.Dataset):
         # Load the Structural weight
         self.rel_dict = {}
         self.length = 128
+        # change
+        self.obj_num = 10
         rel_zero_list = list(np.zeros([self.obj_num]))
         self.rel_file_list = os.listdir(self.rel_path)
         for rel_file in self.rel_file_list:
@@ -88,10 +93,14 @@ class SentenceREDataset(data.Dataset):
 
     def __getitem__(self, index):
         item = self.data[index]
-        seq = list(self.tokenizer(item, **self.kwargs))
+        objs = self.obj_dict[item['img_id']]
+        seq = list(self.tokenizer(item, objs,  **self.kwargs))
         pos1 = seq[-1]
         pos2 = seq[-2]
         pic = self.img_dict[item['img_id']]
+        
+
+
         rel = self.rel_dict[item['img_id']]
         rel = self.padding(item, rel, pos1, pos2)
 
